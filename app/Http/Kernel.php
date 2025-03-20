@@ -46,9 +46,6 @@ class Kernel extends HttpKernel {
     /**
      * The application's middleware aliases.
      *
-     * Aliases may be used to register middleware with the application.
-     * These aliases will be used when registering route middleware.
-     *
      * @var array<string, class-string|string>
      */
     protected $middlewareAliases = [

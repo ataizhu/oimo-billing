@@ -13,6 +13,8 @@ return new class extends Migration {
             $table->string('database_name', 64)->unique();
             $table->string('database_user', 64)->unique();
             $table->string('database_password');
+            $table->string('admin_email')->unique();
+            $table->string('admin_password');
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
