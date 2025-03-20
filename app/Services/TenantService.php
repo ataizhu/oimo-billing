@@ -55,7 +55,7 @@ class TenantService {
             // Применяем миграции для базы данных клиента
             $this->runMigrations($client);
 
-            // Создаем администратора
+            // Создаем администратора в базе данных тенанта
             $this->createAdminUser($client);
 
             return true;
@@ -80,10 +80,6 @@ class TenantService {
             // Удаляем запись из таблицы tenants
             DB::table('tenants')->where('id', $client->database_name)->delete();
             Log::info("Tenant record deleted");
-
-            // Удаляем запись из таблицы users в основной базе данных
-            DB::table('users')->where('email', $client->admin_email)->delete();
-            Log::info("User record deleted from main database");
 
             // Удаляем базу данных
             if ($this->checkDatabaseExists($client->database_name)) {
