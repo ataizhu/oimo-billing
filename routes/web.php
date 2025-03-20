@@ -7,6 +7,7 @@ use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\PaymentController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Admin\ClientController;
 
 /*
 |--------------------------------------------------------------------------
@@ -48,9 +49,7 @@ Route::middleware('auth')->group(function () {
 
     // Маршруты для администратора
     Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {
-        Route::get('clients', function () {
-            return view('admin.clients.index');
-        })->name('clients.index');
+        Route::get('clients', [ClientController::class, 'index'])->name('clients.index');
     });
 });
 

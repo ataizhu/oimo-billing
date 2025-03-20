@@ -28,6 +28,9 @@
                                         Домен</th>
                                     <th
                                         class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        База данных</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Статус</th>
                                     <th
                                         class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -38,11 +41,14 @@
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                @forelse($clients ?? [] as $client)
+                                @forelse($clients as $client)
                                     <tr>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $client->id }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $client->name }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $client->domain }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            {{ $client->database_name }}
+                                        </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <span
                                                 class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $client->is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
@@ -66,7 +72,7 @@
                                                 @csrf
                                                 @method('DELETE')
                                                 <button type="submit" class="text-red-600 hover:text-red-900"
-                                                    onclick="return confirm('Вы уверены?')">
+                                                    onclick="return confirm('Вы уверены? Это действие удалит базу данных клиента.')">
                                                     Удалить
                                                 </button>
                                             </form>
@@ -74,13 +80,17 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="6" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                        <td colspan="7" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
                                             Клиенты не найдены
                                         </td>
                                     </tr>
                                 @endforelse
                             </tbody>
                         </table>
+                    </div>
+
+                    <div class="mt-4">
+                        {{ $clients->links() }}
                     </div>
                 </div>
             </div>

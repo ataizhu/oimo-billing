@@ -9,11 +9,15 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\View;
 
 class ClientController extends Controller {
     public function index() {
-        $clients = Client::paginate(10);
-        return view('admin.clients.index', compact('clients'));
+        $clients = Client::query()
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
+
+        return View::make('admin.clients.index', compact('clients'));
     }
 
     public function create() {
