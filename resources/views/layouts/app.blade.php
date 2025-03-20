@@ -13,7 +13,7 @@
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
 
     <!-- Scripts -->
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
 <body class="font-sans antialiased">
@@ -22,39 +22,44 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex justify-between h-16">
                     <div class="flex">
-                        <!-- Logo -->
-                        <div class="shrink-0 flex items-center">
-                            <a href="{{ route('home') }}">
-                                <x-application-logo class="block h-9 w-auto fill-current text-gray-800" />
+                        <div class="flex-shrink-0 flex items-center">
+                            <a href="{{ route('home') }}" class="text-xl font-bold text-gray-800">
+                                {{ config('app.name', 'Laravel') }}
                             </a>
                         </div>
 
-                        <!-- Navigation Links -->
-                        <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex">
-                            <x-nav-link :href="route('home')" :active="request()->routeIs('home')">
-                                Главная
-                            </x-nav-link>
-                            @auth
-                                <x-nav-link :href="route('plans.index')" :active="request()->routeIs('plans.*')">
-                                    Тарифы
-                                </x-nav-link>
-                            @endauth
-                        </div>
+                        @auth
+                            <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex">
+                                <a href="{{ route('plans.index') }}"
+                                    class="text-gray-700 hover:text-gray-900 px-3 py-2">Тарифы</a>
+                                <a href="{{ route('subscriptions.index') }}"
+                                    class="text-gray-700 hover:text-gray-900 px-3 py-2">Подписки</a>
+                                <a href="{{ route('invoices.index') }}"
+                                    class="text-gray-700 hover:text-gray-900 px-3 py-2">Счета</a>
+                                <a href="{{ route('payments.index') }}"
+                                    class="text-gray-700 hover:text-gray-900 px-3 py-2">Платежи</a>
+                            </div>
+                        @endauth
                     </div>
 
-                    <!-- Settings Dropdown -->
-                    <div class="hidden sm:flex sm:items-center sm:ml-6">
+                    <div class="flex items-center">
                         @auth
-                            <form method="POST" action="{{ route('logout') }}">
-                                @csrf
-                                <button type="submit" class="text-sm text-gray-600 hover:text-gray-900">
-                                    Выйти
-                                </button>
-                            </form>
-                        @else
-                            <a href="{{ route('login') }}" class="text-sm text-gray-600 hover:text-gray-900">
-                                Войти
-                            </a>
+                            <div class="hidden sm:flex sm:items-center sm:ml-6">
+                                <div class="relative" x-data="{ open: false }">
+                                    <div class="flex items-center space-x-4">
+                                        @if(Auth::user()->is_admin)
+                                            <a href="{{ route('admin.clients.index') }}"
+                                                class="text-gray-700 hover:text-gray-900">Клиенты</a>
+                                        @endif
+                                        <form method="POST" action="{{ route('logout') }}">
+                                            @csrf
+                                            <button type="submit" class="text-gray-700 hover:text-gray-900">
+                                                Выйти
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
                         @endauth
                     </div>
                 </div>

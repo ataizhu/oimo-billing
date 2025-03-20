@@ -8,6 +8,7 @@ use App\Http\Controllers\PaymentController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Admin\ClientController;
+use Illuminate\Support\Facades\View;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,6 +25,17 @@ Route::get('/', function () {
     return view('welcome');
 })->name('home');
 
+// Маршруты аутентификации
+Route::middleware('guest')->group(function () {
+    Route::get('login', [LoginController::class, 'showLoginForm'])->name('login');
+    Route::post('login', [LoginController::class, 'login']);
+});
+
+Route::middleware('auth')->group(function () {
+    Route::post('logout', [LoginController::class, 'logout'])->name('logout');
+});
+
+// Маршруты для авторизованных пользователей
 Route::middleware(['auth'])->group(function () {
     // Plans
     Route::resource('plans', PlanController::class);
@@ -38,24 +50,12 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('payments', PaymentController::class);
 });
 
-// Маршруты аутентификации
-Route::middleware('guest')->group(function () {
-    Route::get('login', [LoginController::class, 'showLoginForm'])->name('login');
-    Route::post('login', [LoginController::class, 'login']);
-});
-
-Route::middleware('auth')->group(function () {
-    Route::post('logout', [LoginController::class, 'logout'])->name('logout');
-
-    // Маршруты для администратора
-    Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {
-        Route::get('clients', [ClientController::class, 'index'])->name('clients.index');
-    });
-});
-
 // Маршруты админки
-Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
-    Route::resource('clients', \App\Http\Controllers\Admin\ClientController::class);
-    Route::patch('clients/{client}/toggle-status', [\App\Http\Controllers\Admin\ClientController::class, 'toggleStatus'])->name('clients.toggle-status');
-    Route::post('clients/{client}/reset-database', [\App\Http\Controllers\Admin\ClientController::class, 'resetDatabase'])->name('clients.reset-database');
-});
+Route::middleware(['auth', \App\Http\Middleware\AdminMiddleware::class])
+    ->prefix('admin')
+    ->name('admin.')
+    ->group(function () {
+        Route::resource('clients', ClientController::class);
+        Route::post('clients/{client}/toggle-status', [ClientController::class, 'toggleStatus'])->name('clients.toggle-status');
+        Route::post('clients/{client}/reset-database', [ClientController::class, 'resetDatabase'])->name('clients.reset-database');
+    });
