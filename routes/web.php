@@ -51,8 +51,11 @@ Route::middleware(['auth'])->group(function () {
 });
 
 // Маршруты админки
-Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
-    Route::resource('clients', ClientController::class);
-    Route::post('clients/{client}/toggle-status', [ClientController::class, 'toggleStatus'])->name('clients.toggle-status');
-    Route::post('clients/{client}/reset-database', [ClientController::class, 'resetDatabase'])->name('clients.reset-database');
-});
+Route::middleware(['auth', \App\Http\Middleware\AdminMiddleware::class])
+    ->prefix('admin')
+    ->name('admin.')
+    ->group(function () {
+        Route::resource('clients', ClientController::class);
+        Route::post('clients/{client}/toggle-status', [ClientController::class, 'toggleStatus'])->name('clients.toggle-status');
+        Route::post('clients/{client}/reset-database', [ClientController::class, 'resetDatabase'])->name('clients.reset-database');
+    });

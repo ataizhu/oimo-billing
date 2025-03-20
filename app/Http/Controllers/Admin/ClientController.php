@@ -12,6 +12,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redirect;
 
 class ClientController extends Controller {
@@ -31,12 +32,15 @@ class ClientController extends Controller {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'domain' => 'required|string|max:255|unique:clients,domain',
-            'database_name' => 'required|string|max:64|unique:clients,database_name',
-            'database_user' => 'required|string|max:64|unique:clients,database_user',
+            'database_name' => ['required', 'string', 'max:64', 'unique:clients,database_name', 'regex:/^[a-zA-Z][a-zA-Z0-9_]*$/'],
+            'database_user' => ['required', 'string', 'max:64', 'unique:clients,database_user', 'regex:/^[a-zA-Z][a-zA-Z0-9_]*$/'],
             'database_password' => 'required|string|min:8',
             'admin_email' => 'required|email|unique:clients,admin_email',
             'admin_password' => 'required|string|min:8',
             'is_active' => 'boolean'
+        ], [
+            'database_name.regex' => 'Имя базы данных может содержать только буквы, цифры и знак подчеркивания, и должно начинаться с буквы',
+            'database_user.regex' => 'Имя пользователя базы данных может содержать только буквы, цифры и знак подчеркивания, и должно начинаться с буквы'
         ]);
 
         try {
@@ -54,42 +58,101 @@ class ClientController extends Controller {
                 'is_active' => $request->boolean('is_active', true)
             ]);
 
-            // Создаем базу данных для клиента
-            DB::statement("CREATE DATABASE IF NOT EXISTS {$client->database_name}");
+            try {
+                // Создаем базу данных для клиента
+                DB::statement("CREATE DATABASE IF NOT EXISTS `{$client->database_name}`");
 
-            // Создаем пользователя базы данных
-            DB::statement("CREATE USER IF NOT EXISTS '{$client->database_user}'@'localhost' IDENTIFIED BY '{$validated['database_password']}'");
-            DB::statement("GRANT ALL PRIVILEGES ON {$client->database_name}.* TO '{$client->database_user}'@'localhost'");
-            DB::statement("FLUSH PRIVILEGES");
+                // Создаем пользователя базы данных
+                DB::statement("CREATE USER IF NOT EXISTS `{$client->database_user}`@`localhost` IDENTIFIED BY ?", [$validated['database_password']]);
+                DB::statement("GRANT ALL PRIVILEGES ON `{$client->database_name}`.* TO `{$client->database_user}`@`localhost`");
+                DB::statement("FLUSH PRIVILEGES");
 
-            // Подключаемся к базе данных клиента
-            config(['database.connections.client.database' => $client->database_name]);
-            config(['database.connections.client.username' => $client->database_user]);
-            config(['database.connections.client.password' => $validated['database_password']]);
+                // Подключаемся к базе данных клиента
+                config(['database.connections.client.database' => $client->database_name]);
+                config(['database.connections.client.username' => $client->database_user]);
+                config(['database.connections.client.password' => $validated['database_password']]);
 
-            // Запускаем миграции для базы данных клиента
-            \Artisan::call('migrate', [
-                '--database' => 'client',
-                '--path' => 'database/migrations/tenant',
-                '--force' => true
-            ]);
+                // Очищаем старое соединение
+                DB::purge('client');
+                DB::disconnect('client');
 
-            // Создаем администратора клиента
-            DB::connection('client')->table('users')->insert([
-                'name' => 'Admin',
-                'email' => $validated['admin_email'],
-                'password' => Hash::make($validated['admin_password']),
-                'created_at' => now(),
-                'updated_at' => now()
-            ]);
+                // Устанавливаем новое соединение
+                DB::reconnect('client');
 
-            DB::commit();
+                // Проверяем соединение
+                try {
+                    DB::connection('client')->getPdo();
+                } catch (\Exception $e) {
+                    throw new \Exception('Не удалось подключиться к базе данных клиента: ' . $e->getMessage());
+                }
 
-            return redirect()->route('admin.clients.show', $client)
-                ->with('success', 'Клиент успешно создан');
+                // Запускаем миграции для базы данных клиента с таймаутом
+                $migrateOutput = null;
+                $migrateError = null;
+
+                try {
+                    $migrateOutput = Artisan::call('migrate', [
+                        '--database' => 'client',
+                        '--path' => 'database/migrations/tenant',
+                        '--force' => true
+                    ]);
+                } catch (\Exception $e) {
+                    $migrateError = $e->getMessage();
+                }
+
+                if ($migrateOutput !== 0 || $migrateError) {
+                    throw new \Exception('Ошибка при выполнении миграций: ' . ($migrateError ?: Artisan::output()));
+                }
+
+                // Создаем администратора клиента
+                try {
+                    DB::connection('client')->table('users')->insert([
+                        'name' => 'Admin',
+                        'email' => $validated['admin_email'],
+                        'password' => Hash::make($validated['admin_password']),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                        'is_admin' => true
+                    ]);
+                } catch (\Exception $e) {
+                    throw new \Exception('Ошибка при создании администратора: ' . $e->getMessage());
+                }
+
+                DB::commit();
+
+                // Очищаем соединение после успешного создания
+                DB::purge('client');
+                DB::disconnect('client');
+
+                return redirect("/admin/clients/{$client->id}")
+                    ->with('success', 'Клиент успешно создан');
+
+            } catch (\Exception $e) {
+                // Если произошла ошибка при создании БД или пользователя,
+                // пытаемся откатить изменения
+                try {
+                    // Очищаем соединение перед удалением
+                    DB::purge('client');
+                    DB::disconnect('client');
+
+                    DB::statement("DROP DATABASE IF EXISTS `{$client->database_name}`");
+                    DB::statement("DROP USER IF EXISTS `{$client->database_user}`@`localhost`");
+                    DB::statement("FLUSH PRIVILEGES");
+                } catch (\Exception $cleanupError) {
+                    Log::error('Ошибка при очистке после неудачного создания клиента: ' . $cleanupError->getMessage());
+                }
+                throw $e;
+            }
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Ошибка при создании клиента: ' . $e->getMessage());
+
+            // Очищаем все соединения при ошибке
+            DB::purge('client');
+            DB::disconnect('client');
+
+            return back()
+                ->withInput()
+                ->withErrors(['error' => 'Ошибка при создании клиента: ' . $e->getMessage()]);
         }
     }
 
@@ -214,14 +277,14 @@ class ClientController extends Controller {
 
             // Удаляем существующую базу данных
             if ($this->checkDatabaseExists($client->database_name)) {
-                DB::statement("DROP DATABASE IF EXISTS {$client->database_name}");
+                DB::statement("DROP DATABASE IF EXISTS `{$client->database_name}`");
             }
 
             // Создаем новую базу данных
-            DB::statement("CREATE DATABASE {$client->database_name}");
+            DB::statement("CREATE DATABASE `{$client->database_name}`");
 
             // Назначаем права
-            DB::statement("GRANT ALL PRIVILEGES ON {$client->database_name}.* TO '{$client->database_user}'@'localhost'");
+            DB::statement("GRANT ALL PRIVILEGES ON `{$client->database_name}`.* TO `{$client->database_user}`@`localhost`");
             DB::statement("FLUSH PRIVILEGES");
 
             // Подключаемся к базе данных клиента
@@ -229,12 +292,30 @@ class ClientController extends Controller {
             config(['database.connections.client.username' => $client->database_user]);
             config(['database.connections.client.password' => $client->database_password]);
 
+            // Очищаем старое соединение
+            DB::purge('client');
+            DB::disconnect('client');
+
+            // Устанавливаем новое соединение
+            DB::reconnect('client');
+
+            // Проверяем соединение
+            try {
+                DB::connection('client')->getPdo();
+            } catch (\Exception $e) {
+                throw new \Exception('Не удалось подключиться к базе данных клиента: ' . $e->getMessage());
+            }
+
             // Запускаем миграции
-            \Artisan::call('migrate', [
+            $migrateOutput = Artisan::call('migrate', [
                 '--database' => 'client',
                 '--path' => 'database/migrations/tenant',
                 '--force' => true
             ]);
+
+            if ($migrateOutput !== 0) {
+                throw new \Exception('Ошибка при выполнении миграций: ' . Artisan::output());
+            }
 
             // Создаем администратора
             DB::connection('client')->table('users')->insert([
@@ -242,14 +323,24 @@ class ClientController extends Controller {
                 'email' => $client->admin_email,
                 'password' => $client->admin_password,
                 'created_at' => now(),
-                'updated_at' => now()
+                'updated_at' => now(),
+                'is_admin' => true
             ]);
 
             DB::commit();
 
+            // Очищаем соединение после успешного создания
+            DB::purge('client');
+            DB::disconnect('client');
+
             return back()->with('success', 'База данных клиента успешно сброшена');
         } catch (\Exception $e) {
             DB::rollBack();
+
+            // Очищаем соединение при ошибке
+            DB::purge('client');
+            DB::disconnect('client');
+
             return back()->with('error', 'Ошибка при сбросе базы данных: ' . $e->getMessage());
         }
     }
